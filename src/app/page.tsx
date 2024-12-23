@@ -111,7 +111,6 @@ export default function Home() {
   }
 
   const SOCKET_URL = "wss://audio.enty.services/stream";
-  let manualDisconnect = false; // 标志位
 
   // Initialize WebSocket and media devices
   useEffect(() => {
@@ -130,7 +129,6 @@ export default function Home() {
     requestWakeLock();
 
     return () => {
-      manualDisconnect = true;
       if (wakeLock) {
         wakeLock.release().then(() => {
           console.log("Screen wake lock released");
@@ -254,10 +252,8 @@ export default function Home() {
 
             websocket.onclose = () => {
               console.log("WebSocket connection closed...");
-              if (!isInCall) {
-                setConnectionStatus("Reconnecting...");
-                setTimeout(reconnectWebSocket, 5000);
-              }
+              setConnectionStatus("Reconnecting...");
+              setTimeout(reconnectWebSocket, 5000);
             };
 
             websocket.onerror = (error) => {
@@ -275,7 +271,6 @@ export default function Home() {
     document.body.appendChild(script);
 
     return () => {
-      manualDisconnect = true;
       if (socket) {
         socket.close();
       }
@@ -306,28 +301,25 @@ export default function Home() {
   // 添加状态来跟踪是否在通话中
   const [isInCall, setIsInCall] = useState(true);
 
-  // 定义结束通话的函数
-  function endCall() {
-    manualDisconnect = true; // 设置手动断开标志位
-
-    // 关闭 WebSocket 连接
+  // End call function
+  async function endCall() {
     if (socket) {
       socket.close();
       setSocket(null);
     }
 
-    // 停止 MediaRecorder
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       mediaRecorder.stream.getTracks().forEach(track => track.stop());
       setMediaRecorder(null);
     }
 
-    // 更新状态
     setIsInCall(false);
     setIsRecording(false);
     setIsPlayingAudio(false);
     setConnectionStatus("Closed");
+
+    await new Promise((resolve) => setTimeout(resolve, 1000000));
   }
 
   return (
@@ -342,7 +334,7 @@ export default function Home() {
           {connectionStatus}
         </div>
       </div>
-  
+
       <div className={styles.mainContent}>
         <div className={styles.avatarSection}>
           <div
@@ -359,7 +351,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-  
+
       <div className={styles.controls}>
           <button
             className={isInCall ? styles.endCallButton : styles.startCallButton}
