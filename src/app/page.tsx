@@ -231,22 +231,52 @@ export default function Home() {
 
             websocket.onmessage = (event) => {
               try {
-                  // 处理接收到的 JSON 字符串
-                  const message = JSON.parse(event.data);
-                  if (message.event === "interrupt") {
-                      console.log("Received interrupt signal");
-                      
-                      // 停止当前音频播放
-                      audioManager.stopCurrentAudio();
-  
-                      // 停止录音并切换状态
-                      setIsRecording(true);
-                      setIsPlayingAudio(false);
-  
-                      return;
+                // 如果解析失败，判断数据类型
+                if (event.data instanceof ArrayBuffer) {
+                  try {
+                    // 处理 ArrayBuffer
+                    const decoder = new TextDecoder("utf-8");
+                    const text = decoder.decode(event.data);
+                    message = JSON.parse(text);
+
+                    if (message.event === "interrupt") {
+                        console.log("Received interrupt signal");
+                        
+                        // 停止当前音频播放
+                        audioManager.stopCurrentAudio();
+    
+                        // 停止录音并切换状态
+                        setIsRecording(true);
+                        setIsPlayingAudio(false);
+    
+                        return;
                   }
-                } catch (error) {
-                  console.warn("Failed to parse JSON string:", error);
+                  } catch (arrayBufferError) {
+                    console.error("Failed to parse ArrayBuffer:", arrayBufferError);
+                  }
+                } else if (event.data instanceof Blob) {
+                  try {
+                    // 处理 Blob
+                    const text = await event.data.text();
+                    message = JSON.parse(text);
+                    if (message.event === "interrupt") {
+                        console.log("Received interrupt signal");
+                        
+                        // 停止当前音频播放
+                        audioManager.stopCurrentAudio();
+    
+                        // 停止录音并切换状态
+                        setIsRecording(true);
+                        setIsPlayingAudio(false);
+    
+                        return;
+                  }
+                  } catch (blobError) {
+                    console.error("Failed to parse Blob:", blobError);
+                  }
+                } else {
+                  console.warn("Unhandled data type:", event.data);
+                }
               }
 
               setIsRecording(false);
