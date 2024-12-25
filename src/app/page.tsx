@@ -230,9 +230,10 @@ export default function Home() {
             };
 
             websocket.onmessage = (event) => {
-              if (typeof event.data === "string") {
+              if (event.data instanceof Blob) {
+                const text = await event.data.text();
                 // 处理接收到的 JSON 字符串
-                const message = JSON.parse(event.data);
+                const message = JSON.parse(text);
         
                 if (message.event === "interrupt") {
                     console.log("Received interrupt signal");
