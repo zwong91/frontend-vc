@@ -247,7 +247,6 @@ export default function Home() {
                 } catch (arrayBufferError) {
                   console.warn("Failed to parse ArrayBuffer:", arrayBufferError);
                 }
-              }
 
               setIsRecording(false);
               setIsPlayingAudio(true);
