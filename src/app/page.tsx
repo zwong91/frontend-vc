@@ -230,20 +230,26 @@ export default function Home() {
             };
 
             websocket.onmessage = (event) => {
-                // 处理接收到的 JSON 字符串
-                const message = JSON.parse(event.data);
-                if (message.event === "interrupt") {
-                    console.log("Received interrupt signal");
-                    
-                    // 停止当前音频播放
-                    audioManager.stopCurrentAudio();
 
-                    // 停止录音并切换状态
-                    setIsRecording(true);
-                    setIsPlayingAudio(false);
-
-                    return;
+                try {
+                    // 处理接收到的 JSON 字符串
+                    const message = JSON.parse(event.data);
+                    if (message.event === "interrupt") {
+                        console.log("Received interrupt signal");
+                        
+                        // 停止当前音频播放
+                        audioManager.stopCurrentAudio();
+    
+                        // 停止录音并切换状态
+                        setIsRecording(true);
+                        setIsPlayingAudio(false);
+    
+                        return;
+                    }
+                  } catch (error) {
+                    console.warn("Failed to parse JSON string:", error);
                 }
+
 
               setIsRecording(false);
               setIsPlayingAudio(true);
