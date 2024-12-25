@@ -12,6 +12,8 @@ export default function Home() {
   const [audioQueue, setAudioQueue] = useState<Blob[]>([]);
   const [audioDuration, setAudioDuration] = useState<number>(0); // State to track audio duration
 
+  const [isCallEnded, setIsCallEnded] = useState(false); // Add this state
+
   // 定义可能的连接状态类型
   type ConnectionStatus = "Connecting..." | "Connected" | "Disconnected" | "Closed";
 
@@ -221,6 +223,24 @@ export default function Home() {
             };
 
             websocket.onmessage = (event) => {
+              if (typeof event.data === "string") {
+                // 处理接收到的 JSON 字符串
+                const message = JSON.parse(event.data);
+        
+                if (message.event === "interrupt") {
+                    console.log("Received interrupt signal");
+                    
+                    // 停止当前音频播放
+                    audioManager.stopCurrentAudio();
+
+                    // 停止录音并切换状态
+                    setIsRecording(true);
+                    setIsPlayingAudio(false);
+
+                    return;
+                }
+              }
+
               setIsRecording(false);
               setIsPlayingAudio(true);
 
@@ -251,6 +271,7 @@ export default function Home() {
             };
 
             websocket.onclose = () => {
+              if (isCallEnded) return; // Don't reconnect if the call has ended
               console.log("WebSocket connection closed...");
               setConnectionStatus("Reconnecting...");
               setTimeout(reconnectWebSocket, 5000);
@@ -275,7 +296,7 @@ export default function Home() {
         socket.close();
       }
     };
-  }, []);
+  }, [isCallEnded]);
 
   // Handle media recorder pause/resume
   useEffect(() => {
@@ -305,8 +326,9 @@ export default function Home() {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // End call function
-  async function endCall() {
+  const endCall = async () => {
+    setIsCallEnded(true); // Set isCallEnded to true to prevent reconnection
+
     if (socket) {
       socket.close();
       setSocket(null);
@@ -322,12 +344,7 @@ export default function Home() {
     setIsRecording(false);
     setIsPlayingAudio(false);
     setConnectionStatus("Closed");
-
-    // Block execution indefinitely using a loop with an empty condition
-    while (true) {
-      await sleep(1000);
-    }
-  }
+  };
 
   return (
     <div className={styles.container}>
