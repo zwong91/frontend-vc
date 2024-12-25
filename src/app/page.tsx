@@ -230,33 +230,35 @@ export default function Home() {
             };
 
             websocket.onmessage = (event) => {
-              try {
-                // 如果解析失败，判断数据类型
-                if (event.data instanceof ArrayBuffer) {
-                  try {
-                    // 处理 ArrayBuffer
-                    const decoder = new TextDecoder("utf-8");
-                    const text = decoder.decode(event.data);
-                    message = JSON.parse(text);
-
-                    if (message.event === "interrupt") {
-                        console.log("Received interrupt signal");
-                        
-                        // 停止当前音频播放
-                        audioManager.stopCurrentAudio();
-    
-                        // 停止录音并切换状态
-                        setIsRecording(true);
-                        setIsPlayingAudio(false);
-    
-                        return;
+                try {
+      // 如果解析失败，判断数据类型
+      if (event.data instanceof ArrayBuffer) {
+            try {
+                  // 处理 ArrayBuffer
+                  const decoder = new TextDecoder("utf-8");
+                  const text = decoder.decode(event.data);
+                  message = JSON.parse(text);
+            
+                  if (message.event === "interrupt") {
+                    console.log("Received interrupt signal");
+            
+                    // 停止当前音频播放
+                    audioManager.stopCurrentAudio();
+            
+                    // 停止录音并切换状态
+                    setIsRecording(true);
+                    setIsPlayingAudio(false);
+            
+                    return;
                   }
-                  } catch (arrayBufferError) {
-                    console.error("Failed to parse ArrayBuffer:", arrayBufferError);
-                  }
-                } else {
-                  console.warn("Unhandled data type:", event.data);
+                } catch (arrayBufferError) {
+                  console.error("Failed to parse ArrayBuffer:", arrayBufferError);
                 }
+              } else {
+                console.warn("Unhandled data type:", event.data);
+              }
+              } catch (error) {
+                console.error("Unexpected error:", error);
               }
 
               setIsRecording(false);
