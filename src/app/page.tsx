@@ -177,7 +177,7 @@ export default function Home() {
                 type: 'audio',
                 recorderType: StereoAudioRecorder,
                 mimeType: 'audio/wav',
-                timeSlice: 500,
+                timeSlice: 200,
                 desiredSampRate: 16000,
                 numberOfAudioChannels: 1,
                 ondataavailable: (blob: Blob) => {
@@ -301,6 +301,10 @@ export default function Home() {
   // 添加状态来跟踪是否在通话中
   const [isInCall, setIsInCall] = useState(true);
 
+  function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   // End call function
   async function endCall() {
     if (socket) {
@@ -319,7 +323,7 @@ export default function Home() {
     setIsPlayingAudio(false);
     setConnectionStatus("Closed");
 
-    await new Promise((resolve) => setTimeout(resolve, 1000000));
+    await sleep(600000);
   }
 
   return (
