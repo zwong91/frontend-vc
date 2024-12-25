@@ -237,7 +237,7 @@ export default function Home() {
                   // 处理 ArrayBuffer
                   const decoder = new TextDecoder("utf-8");
                   const text = decoder.decode(event.data);
-                  message = JSON.parse(text);
+                  const message = JSON.parse(text);
             
                   if (message.event === "interrupt") {
                     console.log("Received interrupt signal");
