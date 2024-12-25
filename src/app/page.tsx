@@ -231,14 +231,7 @@ export default function Home() {
 
             websocket.onmessage = (event) => {
                 try {
-      // 如果解析失败，判断数据类型
-      if (event.data instanceof ArrayBuffer) {
-            try {
-                  // 处理 ArrayBuffer
-                  const decoder = new TextDecoder("utf-8");
-                  const text = decoder.decode(event.data);
-                  const message = JSON.parse(text);
-            
+                  const message = JSON.parse(event.data);
                   if (message.event === "interrupt") {
                     console.log("Received interrupt signal");
             
@@ -252,13 +245,8 @@ export default function Home() {
                     return;
                   }
                 } catch (arrayBufferError) {
-                  console.error("Failed to parse ArrayBuffer:", arrayBufferError);
+                  console.warn("Failed to parse ArrayBuffer:", arrayBufferError);
                 }
-              } else {
-                console.warn("Unhandled data type:", event.data);
-              }
-              } catch (error) {
-                console.error("Unexpected error:", error);
               }
 
               setIsRecording(false);
