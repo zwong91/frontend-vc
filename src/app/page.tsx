@@ -254,26 +254,6 @@ export default function Home() {
                   } catch (arrayBufferError) {
                     console.error("Failed to parse ArrayBuffer:", arrayBufferError);
                   }
-                } else if (event.data instanceof Blob) {
-                  try {
-                    // 处理 Blob
-                    const text = await event.data.text();
-                    message = JSON.parse(text);
-                    if (message.event === "interrupt") {
-                        console.log("Received interrupt signal");
-                        
-                        // 停止当前音频播放
-                        audioManager.stopCurrentAudio();
-    
-                        // 停止录音并切换状态
-                        setIsRecording(true);
-                        setIsPlayingAudio(false);
-    
-                        return;
-                  }
-                  } catch (blobError) {
-                    console.error("Failed to parse Blob:", blobError);
-                  }
                 } else {
                   console.warn("Unhandled data type:", event.data);
                 }
