@@ -33,7 +33,6 @@ export default function Home() {
       if (isPlayingAudio) {
         setIsPlayingAudio(false);
       }
-      audioBufferQueue = [];
     },
 
     playNewAudio: async (audioBlob: Blob) => {
@@ -84,14 +83,8 @@ export default function Home() {
       setIsPlayingAudio(false);
       return;
     }
-
-    setIsRecording(false);
-    setIsPlayingAudio(true);
     // 如果不包含 END_OF_AUDIO，则缓冲音频数据
     bufferAudio(audioData);
-
-    setIsRecording(true);
-    setIsPlayingAudio(false);
   }
 
   // Buffer audio and add it to the queue
@@ -175,7 +168,7 @@ export default function Home() {
                 websocket.onopen = () => {
                   console.log("client connected to websocket");
                   setConnectionStatus("Connected");
-    
+                  setIsInCall(true);
                   const recorder = new RecordRTC(stream, {
                     type: 'audio',
                     recorderType: StereoAudioRecorder,
@@ -225,6 +218,9 @@ export default function Home() {
     
                 websocket.onmessage = (event) => {
                   try {
+
+                    setIsRecording(false);
+                    setIsPlayingAudio(true);
                     let audioData: ArrayBuffer;
     
                     // 如果 event.data 是 ArrayBuffer，直接处理
