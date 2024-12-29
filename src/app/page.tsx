@@ -227,8 +227,7 @@ export default function Home() {
                           // 如果是 Blob 类型，使用 FileReader 将其转换为 ArrayBuffer
                           const reader = new FileReader();
                           reader.onloadend = () => {
-                            audioData = reader.result as ArrayBuffer;
-                            checkAndBufferAudio(audioData);
+                            checkAndBufferAudio(reader.result as ArrayBuffer);
                           };
                           reader.readAsArrayBuffer(event.data);
                           return; // 需要提前退出，等 FileReader 读取完成后再继续处理
