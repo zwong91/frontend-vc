@@ -229,7 +229,7 @@ setIsRecording(false);
             if (event.data instanceof ArrayBuffer) {
               audioData = event.data;
             } else if (event.data instanceof Blob) {
-              audioData = await event.data.arrayBuffer();
+              audioData = event.data.arrayBuffer();
             } else {
               throw new Error("Unsupported data type received");
             }
