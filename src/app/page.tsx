@@ -218,24 +218,26 @@ export default function Home() {
     
                 websocket.onmessage = (event) => {
 
-          console.log("Received message:", event.data);
-          try {
-
-setIsRecording(false);
-                    setIsPlayingAudio(true);
-
-            let audioData: ArrayBuffer;
-
-            if (event.data instanceof ArrayBuffer) {
-              audioData = event.data;
-            }else {
-              throw new Error("Unsupported data type received");
-            }
-
-            checkAndBufferAudio(audioData);
-          } catch (error) {
-            console.error("Error processing WebSocket message:", error);
-          }
+                  console.log("Received message:", event.data);
+                  try {
+        
+                      setIsRecording(false);
+                      setIsPlayingAudio(true);
+                      if (event.data instanceof Blob) {
+                          // 如果是 Blob 类型，使用 FileReader 将其转换为 ArrayBuffer
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            audioData = reader.result as ArrayBuffer;
+                            checkAndBufferAudio(audioData);
+                          };
+                          reader.readAsArrayBuffer(event.data);
+                          return; // 需要提前退出，等 FileReader 读取完成后再继续处理
+                      }else {
+                        throw new Error("Unsupported data type received");
+                      }
+                  } catch (error) {
+                    console.error("Error processing WebSocket message:", error);
+                  }
 
                 };
     
