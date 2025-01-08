@@ -212,7 +212,7 @@ export default function Home() {
                             const base64data = arrayBufferToBase64(reader.result as ArrayBuffer);
     
                             const message = {
-                              event: "start",
+                              type: "start",
                               request: {
                                 audio: base64data,  // Audio data as a binary array or ArrayBuffer
                                 latency: "normal",       // Latency type
