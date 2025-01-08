@@ -2,173 +2,132 @@
 
 import { useEffect, useState, useRef } from "react";
 import styles from "./page.module.css";
-import msgpack from 'msgpack-lite';
+import { useMicVAD, utils } from "@ricky0123/vad-react"
 
-export default function Home() {
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [isRecording, setIsRecording] = useState(true); // true means listening, false means speaking
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false); // State to track audio playback
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [audioQueue, setAudioQueue] = useState<Blob[]>([]);
-  const [audioDuration, setAudioDuration] = useState<number>(0); // State to track audio duration
+import LanguageSelection from './languageselect';
 
-  const [isCallEnded, setIsCallEnded] = useState(false); // Add this state
+// 音频管理器
+const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecording: Function) => {
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null); // 追踪当前播放的音频
 
-  // 定义可能的连接状态类型
-  type ConnectionStatus = "Connecting..." | "Connected" | "Disconnected" | "Closed";
-
-  const [connectionStatus, setConnectionStatus] = useState<string>("Connecting..."); // State to track connection status
-
-  let manualClose = false;
-  let audioContext: AudioContext | null = null;
-  let audioBufferQueue: AudioBuffer[] = [];
-
-  // Check if AudioContext is available in the browser
-  if (typeof window !== "undefined" && window.AudioContext) {
-    audioContext = new AudioContext();
-  }
-
-  const audioManager = {
-    stopCurrentAudio: () => {
-      if (isPlayingAudio) {
-        setIsPlayingAudio(false);
-      }
-    },
-
-    playNewAudio: async (audioBlob: Blob) => {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      // When the metadata of the audio is loaded, set its duration
-      audio.onloadedmetadata = () => {
-        setAudioDuration(audio.duration); // Set the audio duration after loading metadata
-      };
-
-      // Play the audio
-      setIsPlayingAudio(true);
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        setIsPlayingAudio(false);
-        setIsRecording(true);
-
-        if (audioQueue.length > 0) {
-          const nextAudioBlob = audioQueue.shift();
-          if (nextAudioBlob) {
-            audioManager.playNewAudio(nextAudioBlob); // Play next audio in the queue
-          }
-        }
-      };
-
-      try {
-        await audio.play();
-      } catch (error) {
-        console.error("播放音频失败:", error);
-        audioManager.stopCurrentAudio();
-      }
+  const stopCurrentAudio = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setIsPlayingAudio(false);
     }
   };
 
-  // 检查 ArrayBuffer 是否包含 "END_OF_AUDIO" 并处理音频数据
-  function checkAndBufferAudio(audioData: ArrayBuffer) {
-    // 将 ArrayBuffer 转为字符串
+  const playAudio = async (audioBlob: Blob) => {
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    setCurrentAudio(audio); // 设置当前播放的音频对象
+
+    audio.onloadedmetadata = () => setAudioDuration(audio.duration);
+
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      setIsPlayingAudio(false);
+
+      if (audioQueue.length > 0) {
+        const nextAudioBlob = audioQueue.shift();
+        if (nextAudioBlob) {
+          playAudio(nextAudioBlob);
+        }
+      } else {
+        // 播放完所有音频后清空队列
+        setAudioQueue([]);
+        setIsRecording(true);
+      }
+    };
+
+    try {
+      setIsPlayingAudio(true);
+      await audio.play();
+    } catch (error) {
+      console.error("播放音频失败:", error);
+      setIsPlayingAudio(false);
+    }
+  };
+
+  const checkAndBufferAudio = (audioData: ArrayBuffer) => {
     const text = new TextDecoder("utf-8").decode(audioData);
 
     if (text.includes("END_OF_AUDIO")) {
       console.log("Detected END_OF_AUDIO signal in audioData");
-      // 停止当前音频播放
-      audioManager.stopCurrentAudio();
-      // 停止录音并切换状态
+      stopCurrentAudio(); // 停止当前音频播放
       setIsRecording(true);
       setIsPlayingAudio(false);
       return;
     }
-    // 如果不包含 END_OF_AUDIO，则缓冲音频数据
-    bufferAudio(audioData);
-  }
 
-  // Buffer audio and add it to the queue
-  function bufferAudio(data: ArrayBuffer) {
-    if (audioContext) {
-      audioContext.decodeAudioData(data, (buffer) => {
-        // Buffer the audio chunk and push it to the queue
-        audioBufferQueue.push(buffer);
+    // 如果没有检测到 "END_OF_AUDIO" 信号，继续缓存音频并立即播放
+    const audioBlob = new Blob([audioData], { type: "audio/wav" });
+    setAudioQueue((prevQueue: Blob[]) => {
+      const newQueue = [...prevQueue, audioBlob];
+      return newQueue;
+    });
+  };
 
-        // If we are not already playing, start playing the audio
-        if (!isPlayingAudio) {
-          playAudioBufferQueue();
-        }
-      });
-    }
-  }
+  return {
+    isPlayingAudio,
+    audioDuration,
+    playAudio,
+    checkAndBufferAudio,
+    stopCurrentAudio,
+  };
+};
 
-  // Play the buffered audio chunks from the queue
-  function playAudioBufferQueue() {
-    if (audioBufferQueue.length === 0) {
-      setIsPlayingAudio(false); // Stop playback if queue is empty
-      setIsRecording(true); // Start recording again
-      return;
-    }
-
-    const buffer = audioBufferQueue.shift(); // Get the next audio buffer
-    if (buffer && audioContext) {
-      const source = audioContext.createBufferSource();
-      source.buffer = buffer;
-
-      // Connect the source to the audio context's output
-      source.connect(audioContext.destination);
-
-      // When this audio ends, play the next one
-      source.onended = () => {
-        playAudioBufferQueue(); // Continue playing the next buffer
-      };
-
-      // Start playing the audio
-      source.start();
-
-      // Update the state to reflect the playing status
-      setIsPlayingAudio(true);
-    }
-  }
+// WebSocket 管理器
+const useWebSocket = (
+  audioQueue: Blob[],
+  setAudioQueue: Function,
+  setIsRecording: Function,
+  checkAndBufferAudio: Function,
+  isSimultaneous: boolean,
+  targetLang: string
+) => {
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
+  const [isCallEnded, setIsCallEnded] = useState(false);
+  const [ws, setSocket] = useState<WebSocket | null>(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [reconnectTimer, setReconnectTimer] = useState<NodeJS.Timeout | null>(null);
 
   //const SOCKET_URL = "wss://gtp.aleopool.cc/stream";
   const SOCKET_URL = "wss://audio.enty.services/stream";
 
- let websocket: WebSocket | null = null;
-
-  // Initialize WebSocket and media devices
   useEffect(() => {
-    let wakeLock: WakeLockSentinel | null = null;
+    // Ensure WebRTC only runs in the browser
+    if (typeof window !== "undefined") {
 
-    // Request screen wake lock to prevent the screen from going to sleep
-    async function requestWakeLock() {
-      try {
-        wakeLock = await navigator.wakeLock.request("screen");
-        console.log("Screen wake lock acquired");
+      const ws = new WebSocket(SOCKET_URL);
+      setSocket(ws);
 
-        const script = document.createElement("script");
-        script.src = "https://www.WebRTC-Experiment.com/RecordRTC.js";
-        script.onload = () => {
-          const RecordRTC = (window as any).RecordRTC;
-          const StereoAudioRecorder = (window as any).StereoAudioRecorder;
-    
-          if (navigator) {
-            navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-            console.log("RecordRTC start.");
-              const reconnectWebSocket = () => {
-                if (manualClose || isCallEnded) {
-                  console.log("Reconnection prevented by manualClose or isCallEnded flag.");
-                  return;
-                }
-    
-                if (websocket) websocket.close();
-                websocket = new WebSocket(SOCKET_URL);
-                setSocket(websocket);
-    
-                websocket.onopen = () => {
-                  console.log("client connected to websocket");
+      const setupConnection = async () => {
+        try {
+          const script = document.createElement("script");
+          script.src = "https://www.WebRTC-Experiment.com/RecordRTC.js";
+          script.onload = () => {
+            const RecordRTC = (window as any).RecordRTC;
+            const StereoAudioRecorder = (window as any).StereoAudioRecorder;
+      
+            if (navigator) {
+              navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+                ws.onopen = () => {
+                  console.log("client connected to ws");
                   setConnectionStatus("Connected");
-                  setIsInCall(true);
+                  const audioConfig = {
+                    type: 'config',
+                    data: {
+                        is_simultaneous: isSimultaneous,
+                        target_lang: targetLang,
+                    }
+                  };
+                  // 发送配置数据
+                  ws.send(JSON.stringify(audioConfig));
+
                   const recorder = new RecordRTC(stream, {
                     type: 'audio',
                     recorderType: StereoAudioRecorder,
@@ -199,8 +158,8 @@ export default function Home() {
                             // Encode the data using MessagePack
                             // const encodedData = msgpack.encode(message);
                             const encodedData = JSON.stringify(message);
-                            if (websocket) {
-                              websocket.send(encodedData);
+                            if (ws) {
+                              ws.send(encodedData);
                             } else {
                               console.error("WebSocket is null, cannot send data.");
                             }
@@ -216,13 +175,11 @@ export default function Home() {
                   recorder.startRecording();
                 };
     
-                websocket.onmessage = (event) => {
-
+                ws.onmessage = (event) => {
                   console.log("Received message:", event.data);
                   try {
         
                       setIsRecording(false);
-                      setIsPlayingAudio(true);
                       if (event.data instanceof Blob) {
                           // 如果是 Blob 类型，使用 FileReader 将其转换为 ArrayBuffer
                           const reader = new FileReader();
@@ -240,36 +197,166 @@ export default function Home() {
 
                 };
     
-                websocket.onclose = () => {
-                  if (manualClose || isCallEnded) return; // Don't reconnect if the call has ended
+                ws.onclose = () => {
+                  if (isCallEnded) return; // Don't reconnect if the call has ended
                   if (connectionStatus === "Closed") {
                     console.log("WebSocket 已关闭");
                     return;
                   }
                   console.log("WebSocket connection closed...");
                   setConnectionStatus("Reconnecting...");
-                  setTimeout(reconnectWebSocket, 5000);
+                  setTimeout(setupConnection, 5000);
                 };
     
-                websocket.onerror = (error) => {
+                ws.onerror = (error) => {
                   console.error("WebSocket error:", error);
-                  websocket?.close();
+                  ws?.close();
                 };
-              };
-    
-              if (manualClose || isCallEnded) return;
-              console.log("client start connect to websocket");
-              reconnectWebSocket();
-            }).catch((error) => {
-              console.error("Error with getUserMedia", error);
-            });
-          }
-        };
-        document.body.appendChild(script);
-      } catch (error) {
-        console.error("Failed to acquire wake lock", error);
-      }
+      
+                if (isCallEnded) return;
+                console.log("client start connect to ws");
+                setupConnection();
+              }).catch((error) => {
+                console.error("Error with getUserMedia", error);
+              });
+            }
+          };
+          document.body.appendChild(script);
+        } catch (error) {
+          console.error("WebSocket 初始化失败:", error);
+          setConnectionStatus("disconnected");
+        }
+      };
+
+      setupConnection();
+
+      return () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+        }
+        if (ws) {
+            ws.close();
+            setConnectionStatus("disconnected");
+        }
+      };
+    } else {
+      setConnectionStatus("WebSocket not supported");
     }
+  }, [checkAndBufferAudio, connectionStatus, isCallEnded, isSimultaneous, reconnectAttempts, reconnectTimer, setIsRecording, targetLang]);
+
+  function arrayBufferToBase64(arrayBuffer: ArrayBuffer): string {
+    let binary = '';
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const len = uint8Array.length;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    return btoa(binary);
+  } 
+
+  return {
+    connectionStatus,
+    isCallEnded,
+    endCall: () => {
+      if (ws) {
+        ws.close();
+      }
+      setConnectionStatus("disconnected");
+      setIsCallEnded(true);
+    },
+    ws,
+  };
+};
+
+
+// 主组件
+export default function Home() {
+  const [audioQueue, setAudioQueue] = useState<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(true);
+  const [audioList, setAudioList] = useState<string[]>([]);
+
+  const [isSimultaneous, setIsSimultaneous] = useState(false);
+  const [targetLang, setTargetLang] = useState('英语');
+  const handleLanguageChange = (newIsSimultaneous: boolean, newTargetLang: string) => {
+    setIsSimultaneous(newIsSimultaneous);
+    setTargetLang(newTargetLang);
+    console.log('Updated Language Config:', newIsSimultaneous, newTargetLang);
+
+  // 在语言变化后触发发送配置数据
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const audioConfig = {
+      type: 'config',
+      data: {
+        is_simultaneous: newIsSimultaneous,
+        target_lang: newTargetLang,
+      },
+    };
+    ws.send(JSON.stringify(audioConfig));
+    console.log('Language config sent:', audioConfig);
+  } else {
+    console.error("ws is not open, unable to send data.");
+  }
+
+  };
+
+  const audioItemKey = (audioURL: string) => audioURL.substring(-10)
+  const vad = useMicVAD({
+    model: "v5",
+    baseAssetPath: "/",
+    onnxWASMBasePath: "/",
+    onSpeechEnd: (audio: Float32Array) => {
+      const wavBuffer = utils.encodeWAV(audio);
+      const base64 = utils.arrayBufferToBase64(wavBuffer);
+      const url = `data:audio/wav;base64,${base64}`;
+      setAudioList((old) => [url, ...old]);
+    },
+  });
+
+
+  const { isPlayingAudio, playAudio, checkAndBufferAudio, stopCurrentAudio } = useAudioManager(
+    audioQueue,
+    setAudioQueue,
+    setIsRecording
+  );
+  const { connectionStatus, isCallEnded, endCall, ws } = useWebSocket(
+    audioQueue,
+    setAudioQueue,
+    setIsRecording,
+    checkAndBufferAudio,
+    isSimultaneous,
+    targetLang
+  );
+
+  useEffect(() => {
+    if (!isPlayingAudio && audioQueue.length > 0) {
+      const nextAudioBlob = audioQueue.shift();
+      if (nextAudioBlob) playAudio(nextAudioBlob);
+    }
+  }, [isPlayingAudio, audioQueue, playAudio]);
+
+  // Integrate Eruda
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+    script.onload = () => {
+      (window as any).eruda.init();
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  // Add wake lock logic
+  useEffect(() => {
+    let wakeLock: WakeLockSentinel | null = null;
+
+    // Request screen wake lock to prevent the screen from going to sleep
+    const requestWakeLock = async () => {
+      try {
+        wakeLock = await navigator.wakeLock.request("screen");
+        console.log("Screen wake lock acquired");
+      } catch (error) {
+        console.error("Error with requestWakeLock", error);
+      }
+    };
 
     requestWakeLock();
 
@@ -284,58 +371,13 @@ export default function Home() {
     };
   }, []);
 
-  // Handle media recorder pause/resume
-  useEffect(() => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      if (isRecording) {
-        mediaRecorder.resume();
-      } else {
-        mediaRecorder.pause();
-      }
-    }
-  }, [isRecording, mediaRecorder]);
-
-  function arrayBufferToBase64(arrayBuffer: ArrayBuffer): string {
-    let binary = '';
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const len = uint8Array.length;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(uint8Array[i]);
-    }
-    return btoa(binary);
-  }
-
-  // 添加状态来跟踪是否在通话中
-  const [isInCall, setIsInCall] = useState(true);
-
-  const endCall = async () => {
-    manualClose = true;
-    setConnectionStatus("Closed");
-    setIsCallEnded(true); // Set isCallEnded to true to prevent reconnection
-
-    if (socket) {
-      socket.close();
-      setSocket(null);
-    }
-
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      setMediaRecorder(null);
-    }
-
-    setIsInCall(false);
-    setIsRecording(false);
-    setIsPlayingAudio(false);
-  };
-
   return (
     <div className={styles.container}>
       <div className={styles.statusBar}>
         <div className={styles.connectionStatus}>
           <div
             className={`${styles.statusDot} ${
-              connectionStatus === "Connected" ? styles.connected : ""
+              connectionStatus === "connected" ? styles.connected : ""
             }`}
           />
           {connectionStatus}
@@ -344,33 +386,83 @@ export default function Home() {
 
       <div className={styles.mainContent}>
         <div className={styles.avatarSection}>
-          <div
-            className={`${styles.avatarContainer} ${
-              isPlayingAudio ? styles.speaking : ""
-            }`}
-          >
+          <div className={`${styles.avatarContainer} ${isPlayingAudio ? styles.speaking : ""}`}>
             <img src="/ai-avatar.png" alt="AI" className={styles.avatar} />
           </div>
           <div className={styles.status}>
-            <span className={isInCall ? (isPlayingAudio ? styles.speakingAnimation : styles.listeningAnimation) : styles.offlineAnimation}>
-              {isInCall ? (isPlayingAudio ? "AI正在说话" : "AI正在听") : "AI 离线"}
+            <span
+              className={
+                connectionStatus === "disconnected"
+                  ? styles.offlineAnimation
+                  : isPlayingAudio
+                  ? styles.speakingAnimation
+                  : styles.listeningAnimation
+              }
+            >
+            {connectionStatus === "disconnected"
+              ? "AI Offline"
+              : isPlayingAudio
+              ? "AI is Speaking"
+              : "AI is Listening"}
             </span>
           </div>
         </div>
       </div>
 
+      <div className={styles.langContent}>
+        <LanguageSelection
+          onLanguageChange={handleLanguageChange} // Pass the language change handler
+        />
+      </div>
+
+      <div>
+      {/* Add the VAD status */}
+      <div>
+        <h6>Listening</h6>
+        {!vad.listening && "Not"} listening
+        <h6>Loading</h6>
+        {!vad.loading && "Not"} loading
+        <h6>Errored</h6>
+        {!vad.errored && "Not"} errored
+        <h6>User Speaking</h6>
+        {!vad.userSpeaking && "Not"} speaking
+        <h6>Audio count</h6>
+        {audioList.length}
+        <h6>Start/Pause</h6>
+        <button onClick={vad.pause}>Pause</button>
+        <button onClick={vad.start}>Start</button>
+        <button onClick={vad.toggle}>Toggle</button>
+      </div>
+
+      {/* Add the audio playlist */}
+      <div>
+        <ol
+          id="playlist"
+          className="self-center pl-0 max-h-[400px] overflow-y-auto no-scrollbar list-none"
+        >
+          {audioList.map((audioURL) => {
+            return (
+              <li className="pl-0" key={audioItemKey(audioURL)}>
+                <audio src={audioURL} controls />
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+
       <div className={styles.controls}>
         <button
-          className={isInCall ? styles.endCallButton : styles.startCallButton}
+          className={!isCallEnded ? styles.startCallButton : styles.endCallButton}
           onClick={() => {
-            if (isInCall) {
+            if (!isCallEnded) {
               endCall();
             } else {
               window.location.reload();
             }
           }}
         >
-          {isInCall ? "结束通话" : "重新通话"}
+          {isCallEnded ? "Call Again" : "End Call"}
         </button>
       </div>
     </div>
