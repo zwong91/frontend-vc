@@ -37,6 +37,8 @@ const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecor
           playAudio(nextAudioBlob);
         }
       } else {
+        // 播放完所有音频后清空队列
+        setAudioQueue([]);
         setIsRecording(true);
       }
     };
@@ -130,12 +132,26 @@ export default function Home() {
     setIsRecording
   );
 
+  // 播放音频
+  const playAudioWithQueue = async (audioBlob: Blob) => {
+    await playAudio(audioBlob);  // 等待当前音频播放完毕
+    // 播放完当前音频后，检查队列是否还有数据，若有则继续播放下一个
+    if (audioQueue.length > 0) {
+      const nextAudioBlob = audioQueue.shift();  // 取出下一个音频
+      if (nextAudioBlob) {
+        playAudio(nextAudioBlob);  // 播放下一个音频
+      }
+    }
+  };
+
   useEffect(() => {
     if (!isPlayingAudio && audioQueue.length > 0) {
       const nextAudioBlob = audioQueue.shift();
-      if (nextAudioBlob) playAudio(nextAudioBlob);
+      if (nextAudioBlob) {
+        playAudioWithQueue(nextAudioBlob);  // 调用带队列播放的函数
+      }
     }
-  }, [isPlayingAudio, audioQueue, playAudio]);
+  }, [isPlayingAudio, audioQueue]);
 
   // Integrate Eruda
   useEffect(() => {
