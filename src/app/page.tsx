@@ -210,10 +210,6 @@ const useWebSocket = (
                   console.error("WebSocket error:", error);
                   ws?.close();
                 };
-      
-                if (isCallEnded) return;
-                console.log("client start connect to ws");
-                setupConnection();
               }).catch((error) => {
                 console.error("Error with getUserMedia", error);
               });
