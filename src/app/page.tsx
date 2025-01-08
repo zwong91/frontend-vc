@@ -101,10 +101,6 @@ const useWebSocket = (
   useEffect(() => {
     // Ensure WebRTC only runs in the browser
     if (typeof window !== "undefined") {
-
-      const ws = new WebSocket(SOCKET_URL);
-      setSocket(ws);
-
       const setupConnection = async () => {
         try {
           const script = document.createElement("script");
@@ -113,6 +109,8 @@ const useWebSocket = (
             const RecordRTC = (window as any).RecordRTC;
             const StereoAudioRecorder = (window as any).StereoAudioRecorder;
       
+            const ws = new WebSocket(SOCKET_URL);
+            setSocket(ws);
             if (navigator) {
               navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
                 ws.onopen = () => {
