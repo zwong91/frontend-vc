@@ -96,20 +96,20 @@ export default function Home() {
     setTargetLang(newTargetLang);
     console.log('Updated Language Config:', newIsSimultaneous, newTargetLang);
 
-  // 在语言变化后触发发送配置数据
-  if (websocket && websocket.readyState === WebSocket.OPEN) {
-    const audioConfig = {
-      type: 'config',
-      data: {
-        is_simultaneous: newIsSimultaneous,
-        target_lang: newTargetLang,
-      },
-    };
-    websocket.send(JSON.stringify(audioConfig));
-    console.log('Language config sent:', audioConfig);
-  } else {
-    console.error("ws is not open, unable to send data.");
-  }
+    // 在语言变化后触发发送配置数据
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const audioConfig = {
+        type: 'config',
+        data: {
+          is_simultaneous: newIsSimultaneous,
+          target_lang: newTargetLang,
+        },
+      };
+      socket.send(JSON.stringify(audioConfig));
+      console.log('Language config sent:', audioConfig);
+    } else {
+      console.error("ws is not open, unable to send data.");
+    }
 
   };
 
