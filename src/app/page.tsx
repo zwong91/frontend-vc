@@ -194,7 +194,7 @@ const useWebSocket = (
               console.log("WebSocket connection closed...");
               setConnectionStatus("Reconnecting...");
               if (reconnectAttempts < 5) {
-                setReconnectAttempts(prev => prev + 1);
+                setReconnectAttempts((prev: number) => prev + 1);
                 setReconnectTimer(setTimeout(setupConnection, 5000));
               } else {
                 console.log("Max reconnect attempts reached");
