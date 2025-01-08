@@ -215,7 +215,7 @@ export default function Home() {
                               request: {
                                 audio: base64data,  // Audio data as a binary array or ArrayBuffer
                                 latency: "normal",       // Latency type
-                                format: "opus",          // Audio format (opus, mp3, or wav)
+                                format: "wav",          // Audio format (opus, mp3, or wav)
                                 prosody: {               // Optional prosody settings
                                   speed: 1.0,            // Speech speed
                                   volume: 0              // Volume adjustment in dB
