@@ -125,7 +125,6 @@ export default function Home() {
     },
   });
 
-
   const { isPlayingAudio, playAudio, checkAndBufferAudio, stopCurrentAudio } = useAudioManager(
     audioQueue,
     setAudioQueue,
@@ -182,7 +181,7 @@ export default function Home() {
     
                 websocket.onopen = () => {
                   console.log("client connected to websocket");
-                  setConnectionStatus("Connected");
+                  setConnectionStatus("connected");
                   const audioConfig = {
                     type: 'config',
                     data: {
