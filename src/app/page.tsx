@@ -99,6 +99,11 @@ const useWebSocket = (
   useEffect(() => {
     if (typeof window !== "undefined") {
       const setupConnection = async () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          console.log("WebSocket already connected.");
+          return;
+        }
+
         try {
           const script = document.createElement("script");
           script.src = "https://www.WebRTC-Experiment.com/RecordRTC.js";
@@ -108,6 +113,7 @@ const useWebSocket = (
 
             const newWs = new WebSocket(SOCKET_URL);
             setSocket(newWs);
+            setConnectionStatus("Connecting...");
 
             newWs.onopen = () => {
               console.log("client connected to ws");
@@ -193,6 +199,8 @@ const useWebSocket = (
               if (isCallEnded) return; // Don't reconnect if the call has ended
               console.log("WebSocket connection closed...");
               setConnectionStatus("Reconnecting...");
+
+              // Only attempt to reconnect if not already disconnected and max reconnect attempts is not reached
               if (reconnectAttempts < 5) {
                 setReconnectAttempts((prev: number) => prev + 1);
                 setReconnectTimer(setTimeout(setupConnection, 5000));
@@ -217,6 +225,7 @@ const useWebSocket = (
 
       setupConnection();
 
+      // Cleanup WebSocket and reconnection timer
       return () => {
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
@@ -254,6 +263,7 @@ const useWebSocket = (
     ws,
   };
 };
+
 
 
 // 主组件
