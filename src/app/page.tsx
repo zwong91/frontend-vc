@@ -80,7 +80,6 @@ const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecor
   };
 };
 
-// WebSocket 管理器
 const useWebSocket = (
   audioQueue: Blob[],
   setAudioQueue: Function,
@@ -95,11 +94,9 @@ const useWebSocket = (
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [reconnectTimer, setReconnectTimer] = useState<NodeJS.Timeout | null>(null);
 
-  //const SOCKET_URL = "wss://gtp.aleopool.cc/stream";
   const SOCKET_URL = "wss://audio.enty.services/stream";
 
   useEffect(() => {
-    // Ensure WebRTC only runs in the browser
     if (typeof window !== "undefined") {
       const setupConnection = async () => {
         try {
@@ -108,24 +105,27 @@ const useWebSocket = (
           script.onload = () => {
             const RecordRTC = (window as any).RecordRTC;
             const StereoAudioRecorder = (window as any).StereoAudioRecorder;
-      
-            const ws = new WebSocket(SOCKET_URL);
-            setSocket(ws);
-            if (navigator) {
-              navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-                ws.onopen = () => {
-                  console.log("client connected to ws");
-                  setConnectionStatus("Connected");
-                  const audioConfig = {
-                    type: 'config',
-                    data: {
-                        is_simultaneous: isSimultaneous,
-                        target_lang: targetLang,
-                    }
-                  };
-                  // 发送配置数据
-                  ws.send(JSON.stringify(audioConfig));
 
+            const newWs = new WebSocket(SOCKET_URL);
+            setSocket(newWs);
+
+            newWs.onopen = () => {
+              console.log("client connected to ws");
+              setConnectionStatus("Connected");
+
+              // 发送配置数据
+              const audioConfig = {
+                type: 'config',
+                data: {
+                  is_simultaneous: isSimultaneous,
+                  target_lang: targetLang,
+                }
+              };
+              newWs.send(JSON.stringify(audioConfig));
+
+              // 获取用户媒体
+              navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
                   const recorder = new RecordRTC(stream, {
                     type: 'audio',
                     recorderType: StereoAudioRecorder,
@@ -139,28 +139,23 @@ const useWebSocket = (
                         reader.onloadend = () => {
                           if (reader.result) {
                             const base64data = arrayBufferToBase64(reader.result as ArrayBuffer);
-    
+
                             const message = {
                               type: "start",
                               request: {
-                                audio: base64data,  // Audio data as a binary array or ArrayBuffer
-                                latency: "normal",       // Latency type
-                                format: "opus",          // Audio format (opus, mp3, or wav)
-                                prosody: {               // Optional prosody settings
-                                  speed: 1.0,            // Speech speed
-                                  volume: 0              // Volume adjustment in dB
+                                audio: base64data,
+                                latency: "normal",
+                                format: "opus",
+                                prosody: {
+                                  speed: 1.0,
+                                  volume: 0
                                 },
-                                vc_uid: "c9cf4e49"   // A unique reference ID
+                                vc_uid: "c9cf4e49"
                               }
                             };
-                            // Encode the data using MessagePack
-                            // const encodedData = msgpack.encode(message);
+
                             const encodedData = JSON.stringify(message);
-                            if (ws) {
-                              ws.send(encodedData);
-                            } else {
-                              console.error("WebSocket is null, cannot send data.");
-                            }
+                            newWs.send(encodedData);
                           } else {
                             console.error("FileReader result is null");
                           }
@@ -169,56 +164,54 @@ const useWebSocket = (
                       }
                     }
                   });
-    
-                  recorder.startRecording();
-                };
-    
-                ws.onmessage = (event) => {
-                  console.log("Received message:", event.data);
-                  try {
-        
-                      setIsRecording(false);
-                      if (event.data instanceof Blob) {
-                          // 如果是 Blob 类型，使用 FileReader 将其转换为 ArrayBuffer
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            checkAndBufferAudio(reader.result as ArrayBuffer);
-                          };
-                          reader.readAsArrayBuffer(event.data);
-                          return; // 需要提前退出，等 FileReader 读取完成后再继续处理
-                      }else {
-                        throw new Error("Unsupported data type received");
-                      }
-                  } catch (error) {
-                    console.error("Error processing WebSocket message:", error);
-                  }
 
-                };
-    
-                ws.onclose = () => {
-                  if (isCallEnded) return; // Don't reconnect if the call has ended
-                  if (connectionStatus === "Closed") {
-                    console.log("WebSocket 已关闭");
-                    return;
-                  }
-                  console.log("WebSocket connection closed...");
-                  setConnectionStatus("Reconnecting...");
-                  setTimeout(setupConnection, 5000);
-                };
-    
-                ws.onerror = (error) => {
-                  console.error("WebSocket error:", error);
-                  ws?.close();
-                };
-              }).catch((error) => {
-                console.error("Error with getUserMedia", error);
-              });
-            }
+                  recorder.startRecording();
+                }).catch((error) => {
+                  console.error("Error with getUserMedia", error);
+                });
+            };
+
+            newWs.onmessage = (event) => {
+              console.log("Received message:", event.data);
+              try {
+                setIsRecording(false);
+                if (event.data instanceof Blob) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    checkAndBufferAudio(reader.result as ArrayBuffer);
+                  };
+                  reader.readAsArrayBuffer(event.data);
+                } else {
+                  throw new Error("Unsupported data type received");
+                }
+              } catch (error) {
+                console.error("Error processing WebSocket message:", error);
+              }
+            };
+
+            newWs.onclose = () => {
+              if (isCallEnded) return; // Don't reconnect if the call has ended
+              console.log("WebSocket connection closed...");
+              setConnectionStatus("Reconnecting...");
+              if (reconnectAttempts < 5) {
+                setReconnectAttempts(prev => prev + 1);
+                setReconnectTimer(setTimeout(setupConnection, 5000));
+              } else {
+                console.log("Max reconnect attempts reached");
+                setConnectionStatus("Disconnected");
+              }
+            };
+
+            newWs.onerror = (error) => {
+              console.error("WebSocket error:", error);
+              newWs.close();
+            };
           };
+
           document.body.appendChild(script);
         } catch (error) {
-          console.error("WebSocket 初始化失败:", error);
-          setConnectionStatus("disconnected");
+          console.error("WebSocket initialization failed:", error);
+          setConnectionStatus("Disconnected");
         }
       };
 
@@ -226,17 +219,17 @@ const useWebSocket = (
 
       return () => {
         if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
+          clearTimeout(reconnectTimer);
         }
         if (ws) {
-            ws.close();
-            setConnectionStatus("disconnected");
+          ws.close();
+          setConnectionStatus("Disconnected");
         }
       };
     } else {
       setConnectionStatus("WebSocket not supported");
     }
-  }, [checkAndBufferAudio, connectionStatus, isCallEnded, isSimultaneous, reconnectAttempts, reconnectTimer, setIsRecording, targetLang]);
+  }, [checkAndBufferAudio, isCallEnded, isSimultaneous, reconnectAttempts, reconnectTimer, setIsRecording, targetLang]);
 
   function arrayBufferToBase64(arrayBuffer: ArrayBuffer): string {
     let binary = '';
@@ -246,7 +239,7 @@ const useWebSocket = (
       binary += String.fromCharCode(uint8Array[i]);
     }
     return btoa(binary);
-  } 
+  }
 
   return {
     connectionStatus,
@@ -255,7 +248,7 @@ const useWebSocket = (
       if (ws) {
         ws.close();
       }
-      setConnectionStatus("disconnected");
+      setConnectionStatus("Disconnected");
       setIsCallEnded(true);
     },
     ws,
