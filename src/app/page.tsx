@@ -315,6 +315,9 @@ export default function Home() {
   }
 
   function endCall() {
+    if (websocket) {
+      websocket.close();
+    }
     setConnectionStatus("disconnected");
     setIsCallEnded(true);
   }
