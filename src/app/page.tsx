@@ -241,6 +241,7 @@ export default function Home() {
                 };
     
                 websocket.onmessage = (event) => {
+                  console.log("Received message:", event.data);
                   try {
                     // 如果 event.data 是 ArrayBuffer，直接处理
                     if (event.data instanceof Blob) {
