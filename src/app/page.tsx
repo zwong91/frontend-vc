@@ -37,8 +37,6 @@ const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecor
           playAudio(nextAudioBlob);
         }
       } else {
-        // 播放完所有音频后清空队列
-        setAudioQueue([]);
         setIsRecording(true);
       }
     };
