@@ -63,6 +63,7 @@ const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecor
       return;
     }
 
+    console.log("checkAndBufferAudio:", audioData);
     // 如果没有检测到 "END_OF_AUDIO" 信号，继续缓存音频并立即播放
     const audioBlob = new Blob([audioData], { type: "audio/wav" });
     setAudioQueue((prevQueue: Blob[]) => {
