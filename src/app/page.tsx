@@ -242,6 +242,7 @@ export default function Home() {
 
                 websocket.onmessage = (event) => {
                   console.log("Received message:", event.data);
+                  websocket.send(JSON.stringify(audioConfig));
                   try {
                     let audioData: ArrayBuffer;
     
