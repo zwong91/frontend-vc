@@ -44,7 +44,7 @@ export default function Home() {
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [isSimultaneous, setIsSimultaneous] = useState(false);
-  const [targetLang, setTargetLang] = useState('英语');
+  const [targetLang, setTargetLang] = useState('中文');
   const handleLanguageChange = (newIsSimultaneous: boolean, newTargetLang: string) => {
     setIsSimultaneous(newIsSimultaneous);
     setTargetLang(newTargetLang);
