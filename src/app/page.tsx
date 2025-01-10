@@ -5,85 +5,40 @@ import styles from "./page.module.css";
 import { useMicVAD, utils } from "@ricky0123/vad-react"
 
 import LanguageSelection from './languageselect';
+import { WavRecorder, WavStreamPlayer } from 'wavtools-patch';
+
+const wavStreamPlayer = new WavStreamPlayer({ sampleRate: 16000 });
 
 // 音频管理器
-const useAudioManager = (audioQueue: Blob[], setAudioQueue: Function, setIsRecording: Function) => {
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+const useAudioManager = (setIsPlayingAudio: Function, setIsRecording: Function) => {
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null); // 追踪当前播放的音频
 
-  const stopCurrentAudio = () => {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      setIsPlayingAudio(false);
-    }
-  };
-
-  const playAudio = async (audioBlob: Blob) => {
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-    setCurrentAudio(audio); // 设置当前播放的音频对象
-
-    audio.onloadedmetadata = () => setAudioDuration(audio.duration);
-
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl);
-      setIsPlayingAudio(false);
-
-      if (audioQueue.length > 0) {
-        const nextAudioBlob = audioQueue.shift();
-        if (nextAudioBlob) {
-          playAudio(nextAudioBlob);
-        }
-      } else {
-        // 播放完所有音频后清空队列
-        setAudioQueue([]);
-        setIsRecording(true);
-      }
-    };
-
-    try {
-      setIsPlayingAudio(true);
-      await audio.play();
-    } catch (error) {
-      console.error("播放音频失败:", error);
-      setIsPlayingAudio(false);
-    }
-  };
 
   const checkAndBufferAudio = (audioData: ArrayBuffer) => {
-    const text = new TextDecoder("utf-8").decode(audioData);
+    // const text = new TextDecoder("utf-8").decode(audioData);
+    // if (text.includes("END_OF_AUDIO")) {
+    //   console.log("Detected END_OF_AUDIO signal in audioData");
+    //   setIsRecording(true);
+    //   setIsPlayingAudio(false);
+    //   return;
+    // }
 
-    if (text.includes("END_OF_AUDIO")) {
-      console.log("Detected END_OF_AUDIO signal in audioData");
-      stopCurrentAudio(); // 停止当前音频播放
-      setIsRecording(true);
-      setIsPlayingAudio(false);
-      return;
-    }
-
-    // 如果没有检测到 "END_OF_AUDIO" 信号，继续缓存音频并立即播放
-    const audioBlob = new Blob([audioData], { type: "audio/wav" });
-    setAudioQueue((prevQueue: Blob[]) => {
-      const newQueue = [...prevQueue, audioBlob];
-      return newQueue;
-    });
+    wavStreamPlayer.add16BitPCM(audioData, 'my-track');
+    setIsPlayingAudio(true)
+  
   };
 
   return {
-    isPlayingAudio,
-    audioDuration,
-    playAudio,
     checkAndBufferAudio,
-    stopCurrentAudio,
   };
 };
 
 // 主组件
 export default function Home() {
-  const [audioQueue, setAudioQueue] = useState<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(true);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
   const [audioList, setAudioList] = useState<string[]>([]);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [connectionStatus, setConnectionStatus] = useState("connecting");
@@ -125,18 +80,10 @@ export default function Home() {
   //   },
   // });
 
-  const { isPlayingAudio, playAudio, checkAndBufferAudio, stopCurrentAudio } = useAudioManager(
-    audioQueue,
-    setAudioQueue,
+  const { checkAndBufferAudio } = useAudioManager(
+    setIsPlayingAudio,
     setIsRecording
   );
-
-  useEffect(() => {
-    if (!isPlayingAudio && audioQueue.length > 0) {
-      const nextAudioBlob = audioQueue.shift();
-      if (nextAudioBlob) playAudio(nextAudioBlob);
-    }
-  }, [isPlayingAudio, audioQueue, playAudio]);
 
   // Integrate Eruda
   useEffect(() => {
@@ -179,9 +126,11 @@ export default function Home() {
                 websocket = new WebSocket(SOCKET_URL);
                 setSocket(websocket);
     
-                websocket.onopen = () => {
+                websocket.onopen = async () => {
                   console.log("client connected to websocket");
                   setConnectionStatus("connected");
+                  // Connect to microphone
+                  await wavStreamPlayer.connect();
                   const audioConfig = {
                     type: 'config',
                     data: {
@@ -194,7 +143,9 @@ export default function Home() {
                     console.log('Language config sent:', audioConfig);    
                   } else {
                     console.error("WebSocket is null, cannot send data.");
-                  }                  
+                  }          
+
+                  wavStreamPlayer.onStop = () => setIsPlayingAudio(false);
 
                   const recorder = new RecordRTC(stream, {
                     type: 'audio',
@@ -268,6 +219,11 @@ export default function Home() {
                 };
     
                 websocket.onclose = () => {
+                  // Interrupt the audio (halt playback) at any time
+                  // To restart, need to call .add16BitPCM() again
+                  const trackOffset = wavStreamPlayer.interrupt();
+                  console.log(`Track ID: ${trackOffset.trackId}, sample number: ${trackOffset.offset}, time in track: ${trackOffset.currentTime}`);
+
                   if (isCallEnded) return; // Don't reconnect if the call has ended
                   if (connectionStatus === "Closed") {
                     console.log("WebSocket 已关闭");
@@ -279,6 +235,10 @@ export default function Home() {
                 };
     
                 websocket.onerror = (error) => {
+                  // Interrupt the audio (halt playback) at any time
+                  // To restart, need to call .add16BitPCM() again
+                  const trackOffset = wavStreamPlayer.interrupt();
+                  console.log(`Track ID: ${trackOffset.trackId}, sample number: ${trackOffset.offset}, time in track: ${trackOffset.currentTime}`);
                   console.error("WebSocket error:", error);
                   websocket?.close();
                 };
