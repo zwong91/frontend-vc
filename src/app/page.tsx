@@ -96,7 +96,7 @@ export default function Home() {
   }, []);
 
   let websocket: WebSocket | null = null;
-  const SOCKET_URL = "wss://audio.enty.services/stream";
+  const SOCKET_URL = "https://d43b-14-155-48-189.ngrok-free.app/stream";
   // Initialize WebSocket and media devices
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
