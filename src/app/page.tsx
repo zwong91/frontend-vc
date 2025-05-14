@@ -67,18 +67,18 @@ export default function Home() {
 
   };
 
-  // const audioItemKey = (audioURL: string) => audioURL.substring(-10)
-  // const vad = useMicVAD({
-  //   model: "v5",
-  //   baseAssetPath: "/",
-  //   onnxWASMBasePath: "/",
-  //   onSpeechEnd: (audio: Float32Array) => {
-  //     const wavBuffer = utils.encodeWAV(audio);
-  //     const base64 = utils.arrayBufferToBase64(wavBuffer);
-  //     const url = `data:audio/wav;base64,${base64}`;
-  //     setAudioList((old) => [url, ...old]);
-  //   },
-  // });
+  const audioItemKey = (audioURL: string) => audioURL.substring(-10)
+  const vad = useMicVAD({
+    model: "v5",
+    baseAssetPath: "/",
+    onnxWASMBasePath: "/",
+    onSpeechEnd: (audio: Float32Array) => {
+      const wavBuffer = utils.encodeWAV(audio);
+      const base64 = utils.arrayBufferToBase64(wavBuffer);
+      const url = `data:audio/wav;base64,${base64}`;
+      setAudioList((old) => [url, ...old]);
+    },
+  });
 
   const { checkAndBufferAudio } = useAudioManager(
     setIsPlayingAudio,
@@ -96,7 +96,7 @@ export default function Home() {
   }, []);
 
   let websocket: WebSocket | null = null;
-  const SOCKET_URL = "https://d43b-14-155-48-189.ngrok-free.app/stream";
+  const SOCKET_URL = "wss://49c8-108-137-9-108.ngrok-free.app/stream";
   // Initialize WebSocket and media devices
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
