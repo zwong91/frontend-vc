@@ -96,7 +96,7 @@ export default function Home() {
   }, []);
 
   let websocket: WebSocket | null = null;
-  const SOCKET_URL = "wss://49c8-108-137-9-108.ngrok-free.app/stream";
+  const SOCKET_URL = "wss://afe5-194-26-196-156.ngrok-free.app/stream";
   // Initialize WebSocket and media devices
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
